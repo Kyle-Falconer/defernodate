@@ -65,10 +65,8 @@ pub fn expand_series(
         .dates;
 
     // Index overrides by recurrence_id for quick lookup.
-    let overrides_map: std::collections::HashMap<NaiveDateTime, &Override> = overrides
-        .iter()
-        .map(|o| (o.recurrence_id, o))
-        .collect();
+    let overrides_map: std::collections::HashMap<NaiveDateTime, &Override> =
+        overrides.iter().map(|o| (o.recurrence_id, o)).collect();
 
     let mut instances = Vec::with_capacity(occurrences.len());
 
@@ -156,7 +154,10 @@ fn build_override_instance(series: &Series, ovr: &Override) -> Instance {
         .tzid
         .from_local_datetime(&actual_local)
         .earliest()
-        .unwrap_or_else(|| Utc.from_utc_datetime(&actual_local).with_timezone(&series.tzid))
+        .unwrap_or_else(|| {
+            Utc.from_utc_datetime(&actual_local)
+                .with_timezone(&series.tzid)
+        })
         .with_timezone(&Utc);
 
     let end_utc = start_utc + chrono::Duration::seconds(actual_duration);

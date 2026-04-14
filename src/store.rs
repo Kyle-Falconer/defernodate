@@ -45,10 +45,7 @@ impl Store {
     pub async fn delete_series(&self, id: &Uuid, calendar_id: &Uuid) -> Result<()> {
         let mut pipe = redis::pipe();
         pipe.del(self.keys.series(id))
-            .srem(
-                self.keys.calendar_series(calendar_id),
-                id.to_string(),
-            )
+            .srem(self.keys.calendar_series(calendar_id), id.to_string())
             .del(self.keys.cache_window(id))
             .del(self.keys.series_overrides(id));
         pipe.query_async::<()>(&mut self.conn.clone()).await?;
@@ -58,10 +55,7 @@ impl Store {
     pub async fn get_calendar_series_ids(&self, calendar_id: &Uuid) -> Result<Vec<Uuid>> {
         let key = self.keys.calendar_series(calendar_id);
         let members: Vec<String> = self.conn.clone().smembers(&key).await?;
-        Ok(members
-            .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect())
+        Ok(members.iter().filter_map(|s| s.parse().ok()).collect())
     }
 
     // --- Overrides ---
@@ -148,11 +142,7 @@ impl Store {
             .transpose()
     }
 
-    pub async fn put_cache_window(
-        &self,
-        series_id: &Uuid,
-        window: &CacheWindow,
-    ) -> Result<()> {
+    pub async fn put_cache_window(&self, series_id: &Uuid, window: &CacheWindow) -> Result<()> {
         let key = self.keys.cache_window(series_id);
         let val = serde_json::to_string(window)?;
         self.conn.clone().set::<_, _, ()>(&key, &val).await?;

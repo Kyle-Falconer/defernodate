@@ -326,8 +326,14 @@ async fn test_split_series() {
 
     // Old series: April 1, 8 (before split)
     // New series: April 15, 22, 29 (after split at 3pm)
-    let old_events: Vec<_> = events.iter().filter(|e| e.series_id == old_series.id).collect();
-    let new_events: Vec<_> = events.iter().filter(|e| e.series_id == new_series.id).collect();
+    let old_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.series_id == old_series.id)
+        .collect();
+    let new_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.series_id == new_series.id)
+        .collect();
     assert_eq!(old_events.len(), 2);
     assert_eq!(new_events.len(), 3);
     assert_eq!(events.len(), 5);

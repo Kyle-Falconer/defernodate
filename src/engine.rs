@@ -75,9 +75,7 @@ impl Engine {
             .ok_or(Error::SeriesNotFound(*series_id))?;
 
         let overrides = self.store.get_overrides_for_series(series_id).await?;
-        let ovr = overrides
-            .iter()
-            .find(|o| o.recurrence_id == *recurrence_id);
+        let ovr = overrides.iter().find(|o| o.recurrence_id == *recurrence_id);
 
         // Build instance directly without cache
         let instances = expand::expand_series(
@@ -182,9 +180,7 @@ impl Engine {
         self.store
             .invalidate_cache_for_series(series_id, &series.calendar_id)
             .await?;
-        self.store
-            .delete_overrides_for_series(series_id)
-            .await?;
+        self.store.delete_overrides_for_series(series_id).await?;
         self.store
             .delete_series(series_id, &series.calendar_id)
             .await?;
@@ -303,8 +299,7 @@ impl Engine {
 
         let overrides = self.store.get_overrides_for_series(series_id).await?;
 
-        let instances =
-            expand::expand_series(&series, &overrides, expand_start, expand_end)?;
+        let instances = expand::expand_series(&series, &overrides, expand_start, expand_end)?;
 
         self.store
             .write_instances_to_cache(
@@ -323,9 +318,7 @@ impl Engine {
                 end_utc: expand_end,
             },
         };
-        self.store
-            .put_cache_window(series_id, &new_window)
-            .await?;
+        self.store.put_cache_window(series_id, &new_window).await?;
 
         Ok(())
     }
