@@ -1,10 +1,8 @@
-name: CI
+name: Cargo Build & Test
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -64,3 +62,19 @@ jobs:
           key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-test-
       - run: cargo test --test integration -- --test-threads=1
+
+  build-release:
+    name: Build release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-build-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-build-
+      - run: rustup component add clippy
+      - run: cargo build --release

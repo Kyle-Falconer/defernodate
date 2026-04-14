@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "Hybrid recurring calendar engine backed by Redis"
 license = "MIT"
+authors = ["Kyle Falconer <kylefalconer@pm.me>"]
+repository = "https://github.com/Kyle-Falconer/defernodate"
+documentation = "https://github.com/Kyle-Falconer/defernodate/blob/main/README.md"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
