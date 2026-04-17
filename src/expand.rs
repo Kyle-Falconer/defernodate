@@ -140,6 +140,8 @@ fn build_instance(series: &Series, local: NaiveDateTime) -> Instance {
         start_local: local,
         tzid: series.tzid,
         title: series.title.clone(),
+        labels: vec![],
+        description: None,
         is_cancelled: false,
         is_override: false,
         payload: None,
@@ -172,6 +174,8 @@ fn build_override_instance(series: &Series, ovr: &Override) -> Instance {
         start_local: actual_local,
         tzid: series.tzid,
         title: ovr.title.clone().unwrap_or_else(|| series.title.clone()),
+        labels: ovr.labels.clone().unwrap_or_default(),
+        description: ovr.description.clone(),
         is_cancelled: ovr.is_cancelled,
         is_override: true,
         payload: ovr.payload.clone(),
@@ -269,6 +273,8 @@ mod tests {
             ),
             duration_secs: None,
             title: Some("Moved standup".into()),
+            labels: None,
+            description: None,
             payload: None,
         }];
         let start = Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap();
@@ -293,6 +299,8 @@ mod tests {
             dtstart_local: None,
             duration_secs: None,
             title: None,
+            labels: None,
+            description: None,
             payload: None,
         }];
         let start = Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap();
@@ -327,6 +335,37 @@ mod tests {
         let ids1: Vec<_> = r1.iter().map(|i| &i.instance_id).collect();
         let ids2: Vec<_> = r2.iter().map(|i| &i.instance_id).collect();
         assert_eq!(ids1, ids2);
+    }
+
+    #[test]
+    fn test_override_labels_and_description() {
+        let series = make_series(Some("FREQ=WEEKLY;BYDAY=WE"));
+        let override_recurrence = NaiveDate::from_ymd_opt(2026, 4, 8)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+        let overrides = vec![Override {
+            series_id: series.id,
+            recurrence_id: override_recurrence,
+            is_cancelled: false,
+            dtstart_local: None,
+            duration_secs: None,
+            title: None,
+            labels: Some(vec!["urgent".into(), "medical".into()]),
+            description: Some("Rescheduled appointment".into()),
+            payload: None,
+        }];
+        let start = Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap();
+        let end = Utc.with_ymd_and_hms(2026, 4, 15, 0, 0, 0).unwrap();
+        let result = expand_series(&series, &overrides, start, end).unwrap();
+        let overridden = result.iter().find(|i| i.is_override).unwrap();
+        assert_eq!(overridden.labels, vec!["urgent", "medical"]);
+        assert_eq!(overridden.description.as_deref(), Some("Rescheduled appointment"));
+
+        // Non-overridden instances should have empty labels and no description
+        let normal = result.iter().find(|i| !i.is_override).unwrap();
+        assert!(normal.labels.is_empty());
+        assert!(normal.description.is_none());
     }
 
     #[test]

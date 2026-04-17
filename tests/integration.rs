@@ -234,6 +234,8 @@ async fn test_override_single_instance() {
             dtstart_local: Some(dt(2026, 4, 8, 10, 0)),
             duration_secs: None,
             title: Some("Moved standup".into()),
+            labels: None,
+            description: None,
             payload: None,
         })
         .await

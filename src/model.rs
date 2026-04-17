@@ -39,6 +39,12 @@ pub struct Override {
     /// Override duration (if changed).
     pub duration_secs: Option<i64>,
     pub title: Option<String>,
+    /// Override labels for this instance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<String>>,
+    /// Override description for this instance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Arbitrary extra fields (location, attendees, etc.).
     pub payload: Option<serde_json::Value>,
 }
@@ -59,6 +65,8 @@ pub struct Instance {
     pub start_local: NaiveDateTime,
     pub tzid: chrono_tz::Tz,
     pub title: String,
+    pub labels: Vec<String>,
+    pub description: Option<String>,
     pub is_cancelled: bool,
     pub is_override: bool,
     pub payload: Option<serde_json::Value>,

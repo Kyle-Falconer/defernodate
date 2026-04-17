@@ -216,6 +216,8 @@ impl Engine {
             dtstart_local: None,
             duration_secs: None,
             title: None,
+            labels: None,
+            description: None,
             payload: None,
         };
         self.edit_instance(ovr).await
