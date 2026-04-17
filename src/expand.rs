@@ -360,7 +360,10 @@ mod tests {
         let result = expand_series(&series, &overrides, start, end).unwrap();
         let overridden = result.iter().find(|i| i.is_override).unwrap();
         assert_eq!(overridden.labels, vec!["urgent", "medical"]);
-        assert_eq!(overridden.description.as_deref(), Some("Rescheduled appointment"));
+        assert_eq!(
+            overridden.description.as_deref(),
+            Some("Rescheduled appointment")
+        );
 
         // Non-overridden instances should have empty labels and no description
         let normal = result.iter().find(|i| !i.is_override).unwrap();
