@@ -1,140 +1,80 @@
 # defernodate
 
-A Rust library crate implementing the **hybrid master + instance cache** pattern for recurring calendar events, backed by Redis.
+A pure, synchronous Rust library for RFC 5545 recurrence expansion
+(RRULE + EXDATE + per-instance overrides). No I/O, no async runtime,
+no storage — the caller supplies ids, timestamps, and persistence.
 
-This is the same architectural pattern used by Apple's CalendarServer: store canonical RRULE rules as the source of truth, maintain a bounded materialized instance cache in Redis sorted sets for fast time-range queries, and expand lazily on cache miss.
+## What it does
 
-## Features
+- Parses `FREQ=WEEKLY;BYDAY=MO,WE,FR`-style RRULE strings.
+- Expands a `Series` across a bounded UTC range, applying
+  `Override`s and cancellations.
+- Handles DST correctly: local DTSTART + IANA timezone; expansion
+  happens in local time, instances are indexed in UTC.
+- Supports "this and future" splits via `split_series`, avoiding
+  exception-list explosion on long-running series.
 
-- **RFC 5545 recurrence** — RRULE, EXDATE, and per-instance overrides via the `rrule` crate
-- **Hybrid caching** — lazy expansion into Redis sorted sets; queries are O(log n + k) cache hits
-- **DST-correct** — local DTSTART + IANA timezone; expands in local time, indexes in UTC
-- **Optimistic concurrency** — version field on series prevents silent overwrites
-- **Split series** — "this and future" edits split the series instead of creating override explosions
-- **Async** — built on `tokio` and `redis-rs` async
+## What it does NOT do
+
+- Store anything. A `Series`, its `Override`s, and any instance
+  cache are the caller's problem. The previous 0.1.x line embedded
+  a Redis store; 0.2.0 removed it so consumers can pick their own
+  storage (Redis, Postgres, in-memory, etc.).
+- Generate ids or timestamps. Callers pass `Uuid::new_v4()` and
+  `Utc::now()` in at the call site, keeping the library
+  deterministic and fully testable with fixed inputs.
+- Run async. The whole public surface is synchronous.
 
 ## Quick start
 
-Add to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-defernodate = { path = "." }  # or git/crates.io once published
+defernodate = "0.2"
 ```
 
 ```rust
 use chrono::{NaiveDate, TimeZone, Utc};
-use defernodate::{CacheConfig, CreateSeries, Engine};
+use defernodate::{build_series, expand_series, CreateSeries};
 use uuid::Uuid;
 
-#[tokio::main]
-async fn main() -> defernodate::Result<()> {
-    let client = redis::Client::open("redis://127.0.0.1:6379")?;
-    let conn = client.get_multiplexed_async_connection().await?;
-    let engine = Engine::new(conn, CacheConfig::default());
-
-    let cal_id = Uuid::new_v4();
-
-    // Create a recurring event: every Mon/Wed/Fri at 9am Eastern
-    let series = engine
-        .create_series(CreateSeries {
-            calendar_id: cal_id,
+fn main() -> defernodate::Result<()> {
+    let series = build_series(
+        CreateSeries {
+            calendar_id: Uuid::new_v4(),
             title: "Standup".into(),
-            dtstart_local: NaiveDate::from_ymd_opt(2026, 4, 1)
+            dtstart_local: NaiveDate::from_ymd_opt(2026, 4, 6)
                 .unwrap()
                 .and_hms_opt(9, 0, 0)
                 .unwrap(),
             tzid: chrono_tz::America::New_York,
-            duration_secs: 1800,
+            duration_secs: 900,
             rrule: Some("FREQ=WEEKLY;BYDAY=MO,WE,FR".into()),
-        })
-        .await?;
+        },
+        Uuid::new_v4(),
+        Utc::now(),
+    );
 
-    // Query a two-week window (expands on first call, cached after)
-    let events = engine
-        .query_events(
-            &cal_id,
-            Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap(),
-            Utc.with_ymd_and_hms(2026, 4, 15, 0, 0, 0).unwrap(),
-        )
-        .await?;
+    let start = Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap();
+    let end = Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap();
+    let instances = expand_series(&series, &[], start, end)?;
 
-    println!("Got {} events for series {}", events.len(), series.id);
+    for inst in instances {
+        println!("{} at {}", inst.title, inst.start_utc);
+    }
     Ok(())
 }
 ```
 
-## API overview
+## Public API
 
-All operations go through the `Engine` struct:
+- `build_series(input, id, now) -> Series`
+- `apply_update(series, expected_version, update, now) -> Result<Series>`
+- `split_series(old, split_at, new, new_id, now) -> (Series, Series)`
+- `expand_series(series, overrides, range_start, range_end) -> Result<Vec<Instance>>`
+- `get_instance(series, overrides, recurrence_id) -> Option<Instance>`
 
-| Method | Description |
-|---|---|
-| `create_series` | Create a recurring or one-off event |
-| `query_events` | Time-range query with automatic cache expansion |
-| `get_series` | Fetch a series by ID |
-| `get_instance` | Fetch a single instance by series + recurrence ID |
-| `update_series` | Update series rule/metadata (optimistic concurrency) |
-| `delete_series` | Remove series and all cached data |
-| `edit_instance` | Create/update a per-instance override |
-| `cancel_instance` | Cancel a single occurrence |
-| `split_series` | "This and future" edit — splits into two series |
-| `warm_cache` | Pre-populate cache for a given range |
-
-## Redis data model
-
-| Key | Type | Purpose |
-|---|---|---|
-| `series:{id}` | String (JSON) | Canonical RRULE, DTSTART, EXDATE, version |
-| `override:{series_id}:{ts}` | String (JSON) | Per-instance exception |
-| `instances:{calendar_id}` | Sorted Set | Time-range index (score = UTC timestamp) |
-| `instance:{instance_id}` | String (JSON) | Materialized instance payload |
-| `cache_window:{series_id}` | String (JSON) | Expanded range tracking |
-| `calendar_series:{calendar_id}` | Set | Series belonging to a calendar |
-
-No Redis modules required — works with vanilla Redis.
-
-## Configuration
-
-```rust
-use defernodate::CacheConfig;
-
-let config = CacheConfig {
-    lookbehind: chrono::Duration::days(30),   // how far back to expand on miss
-    lookahead: chrono::Duration::days(180),   // how far forward to expand on miss
-    instance_ttl: None,                       // optional TTL for cached instances
-    key_prefix: Some("myapp".into()),         // namespace keys in shared Redis
-};
-```
-
-## Testing
-
-Unit tests (no Docker needed):
-
-```sh
-cargo test --lib
-```
-
-Integration tests (requires Docker):
-
-```sh
-cargo test --test integration -- --test-threads=1
-```
-
-All tests:
-
-```sh
-cargo test -- --test-threads=1
-```
-
-## Design references
-
-The implementation is based on the techniques described in:
-
-- *Techniques and Algorithms for Storing and Retrieving Recurring Calendar Events in Multi-User Systems* — covers rule-native, full materialization, and hybrid patterns
-- Apple CalendarServer's `TIME_RANGE` cache with `RECURRANCE_MIN`/`RECURRANCE_MAX` tracking
-- Google Calendar API guidance on avoiding exception explosions via series splitting
+See `CHANGELOG.md` for migration notes from 0.1.x.
 
 ## License
 
-MIT
+MIT.
