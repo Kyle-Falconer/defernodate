@@ -1,5 +1,3 @@
-use uuid::Uuid;
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Serialization error: {0}")]
@@ -7,9 +5,6 @@ pub enum Error {
 
     #[error("RRULE parse error: {0}")]
     RRule(String),
-
-    #[error("Series not found: {0}")]
-    SeriesNotFound(Uuid),
 
     #[error("Version conflict: expected {expected}, found {actual}")]
     VersionConflict { expected: u64, actual: u64 },

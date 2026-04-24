@@ -11,6 +11,13 @@ use crate::model::{CreateSeries, Instance, Override, Series, UpdateSeries};
 
 /// Get a single instance at a recurrence point, or `None` if the
 /// series does not occur there (or the instance is cancelled).
+///
+/// **Cancellation contract (changed from 0.1.x):** A cancelled
+/// override produces `None` here, not `Some(instance_with_is_cancelled=true)`.
+/// Callers that need to distinguish "never existed" from "explicitly
+/// cancelled" should consult their own override storage directly.
+/// Callers that just want "is there an event at this point?" get the
+/// right answer either way.
 pub fn get_instance(
     series: &Series,
     overrides: &[Override],
