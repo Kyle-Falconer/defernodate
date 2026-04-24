@@ -1,7 +1,7 @@
 //! Integration tests for the pure free functions in `defernodate::pure`.
 
 use chrono::{NaiveDate, TimeZone, Utc};
-use defernodate::{apply_update, build_series, CreateSeries, Error, UpdateSeries};
+use defernodate::{apply_update, build_series, split_series, CreateSeries, Error, UpdateSeries};
 use uuid::Uuid;
 
 #[test]
@@ -134,4 +134,77 @@ fn apply_update_replaces_exdates_when_provided() {
     };
     let s2 = apply_update(s, 1, update, later).unwrap();
     assert_eq!(s2.exdates, new_exdates);
+}
+
+#[test]
+fn split_series_sets_until_on_old_and_creates_new() {
+    let s = sample_series();
+    let old_id = s.id;
+    let split_at = NaiveDate::from_ymd_opt(2026, 2, 1)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let new_id = Uuid::new_v4();
+    let now = Utc.with_ymd_and_hms(2026, 1, 15, 12, 0, 0).unwrap();
+    let new_input = CreateSeries {
+        calendar_id: s.calendar_id,
+        title: "Renamed series".into(),
+        dtstart_local: split_at,
+        tzid: s.tzid,
+        duration_secs: s.duration_secs,
+        rrule: s.rrule.clone(),
+    };
+    let (old, new) = split_series(s, &split_at, new_input, new_id, now);
+
+    assert_eq!(old.id, old_id);
+    assert!(old.until_utc.is_some());
+    assert_eq!(old.version, 2);
+    assert_eq!(old.updated_at, now);
+
+    assert_eq!(new.id, new_id);
+    assert_eq!(new.title, "Renamed series");
+    assert_eq!(new.version, 1);
+    assert_eq!(new.created_at, now);
+}
+
+#[test]
+fn split_series_until_respects_tzid() {
+    // DST-aware tz: NY. Split at 2026-03-09T09:00 local (after spring-forward).
+    let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+    let s = build_series(
+        CreateSeries {
+            calendar_id: Uuid::nil(),
+            title: "NY".into(),
+            dtstart_local: NaiveDate::from_ymd_opt(2026, 1, 1)
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap(),
+            tzid: chrono_tz::America::New_York,
+            duration_secs: 0,
+            rrule: Some("FREQ=DAILY".into()),
+        },
+        Uuid::nil(),
+        now,
+    );
+    let split_at = NaiveDate::from_ymd_opt(2026, 3, 9)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let (old, _new) = split_series(
+        s,
+        &split_at,
+        CreateSeries {
+            calendar_id: Uuid::nil(),
+            title: "NY2".into(),
+            dtstart_local: split_at,
+            tzid: chrono_tz::America::New_York,
+            duration_secs: 0,
+            rrule: Some("FREQ=DAILY".into()),
+        },
+        Uuid::new_v4(),
+        now,
+    );
+    // 09:00 NY on 2026-03-09 is EDT (UTC-4) = 13:00 UTC
+    let until = old.until_utc.unwrap();
+    assert_eq!(until.format("%Y-%m-%dT%H:%M:%S").to_string(), "2026-03-09T13:00:00");
 }
