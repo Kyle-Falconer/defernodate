@@ -1,7 +1,7 @@
 //! Integration tests for the pure free functions in `defernodate::pure`.
 
 use chrono::{NaiveDate, TimeZone, Utc};
-use defernodate::{apply_update, build_series, split_series, CreateSeries, Error, UpdateSeries};
+use defernodate::{apply_update, build_series, get_instance, split_series, CreateSeries, Error, Override, UpdateSeries};
 use uuid::Uuid;
 
 #[test]
@@ -207,4 +207,66 @@ fn split_series_until_respects_tzid() {
     // 09:00 NY on 2026-03-09 is EDT (UTC-4) = 13:00 UTC
     let until = old.until_utc.unwrap();
     assert_eq!(until.format("%Y-%m-%dT%H:%M:%S").to_string(), "2026-03-09T13:00:00");
+}
+
+#[test]
+fn get_instance_returns_some_for_in_series_recurrence() {
+    let s = sample_series();
+    let rec = NaiveDate::from_ymd_opt(2026, 1, 5)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let inst = get_instance(&s, &[], &rec).expect("instance exists");
+    assert_eq!(inst.recurrence_id, rec);
+    assert_eq!(inst.title, "Original");
+    assert!(!inst.is_cancelled);
+}
+
+#[test]
+fn get_instance_returns_none_for_cancelled_override() {
+    let s = sample_series();
+    let rec = NaiveDate::from_ymd_opt(2026, 1, 5)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let ovr = Override {
+        series_id: s.id,
+        recurrence_id: rec,
+        is_cancelled: true,
+        dtstart_local: None,
+        duration_secs: None,
+        title: None,
+        labels: None,
+        description: None,
+        payload: None,
+    };
+    let inst = get_instance(&s, &[ovr], &rec);
+    assert!(inst.is_none());
+}
+
+#[test]
+fn get_instance_returns_none_for_non_occurring_recurrence() {
+    // Weekly on Monday; ask for a Sunday.
+    let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+    let s = build_series(
+        CreateSeries {
+            calendar_id: Uuid::nil(),
+            title: "Mondays only".into(),
+            dtstart_local: NaiveDate::from_ymd_opt(2026, 1, 5)  // 2026-01-05 is Mon
+                .unwrap()
+                .and_hms_opt(9, 0, 0)
+                .unwrap(),
+            tzid: chrono_tz::UTC,
+            duration_secs: 0,
+            rrule: Some("FREQ=WEEKLY;BYDAY=MO".into()),
+        },
+        Uuid::nil(),
+        now,
+    );
+    let sunday = NaiveDate::from_ymd_opt(2026, 1, 11)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    let inst = get_instance(&s, &[], &sunday);
+    assert!(inst.is_none());
 }
