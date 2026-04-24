@@ -2,9 +2,6 @@ use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Redis error: {0}")]
-    Redis(#[from] redis::RedisError),
-
     #[error("Serialization error: {0}")]
     Serde(#[from] serde_json::Error),
 

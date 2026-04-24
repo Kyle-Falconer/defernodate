@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-/// Configuration for the hybrid cache engine.
+/// Configuration for a cache-backed caller. Contains pure values only
+/// — no Redis prefixes, no I/O settings. Defaults chosen for a typical
+/// personal calendar (30 days back, 180 days forward).
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     /// How far back from "now" to expand when filling cache on a miss.
@@ -9,8 +11,6 @@ pub struct CacheConfig {
     pub lookahead: chrono::Duration,
     /// Optional TTL for cached instance keys.
     pub instance_ttl: Option<Duration>,
-    /// Redis key prefix for namespacing in shared Redis instances.
-    pub key_prefix: Option<String>,
 }
 
 impl Default for CacheConfig {
@@ -19,7 +19,6 @@ impl Default for CacheConfig {
             lookbehind: chrono::Duration::days(30),
             lookahead: chrono::Duration::days(180),
             instance_ttl: None,
-            key_prefix: None,
         }
     }
 }
