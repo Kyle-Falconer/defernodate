@@ -1,8 +1,8 @@
 [package]
 name = "defernodate"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
-description = "Hybrid recurring calendar engine backed by Redis"
+description = "Pure calendar/RRULE expansion library"
 license = "MIT"
 authors = ["Kyle Falconer <kylefalconer@pm.me>"]
 repository = "https://github.com/Kyle-Falconer/defernodate"
@@ -11,15 +11,8 @@ documentation = "https://github.com/Kyle-Falconer/defernodate/blob/main/README.m
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = { version = "0.10", features = ["serde"] }
-redis = { version = "1", features = ["aio", "tokio-comp"] }
 rrule = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-
-[dev-dependencies]
-testcontainers = "0.25"
-testcontainers-modules = { version = "0.13", features = ["redis"] }
-tokio = { version = "1", features = ["full", "test-util"] }
